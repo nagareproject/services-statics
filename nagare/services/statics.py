@@ -50,7 +50,6 @@ class Statics(plugin.Plugin):
 
     def serve_file(self, dirname, filename):
         filename = os.path.normpath(os.path.join(dirname, *filename.split('/')))
-        print('Serving', filename)
 
         if not filename.startswith(dirname + '/') or not os.path.isfile(filename):
             res = exc.HTTPNotFound()
