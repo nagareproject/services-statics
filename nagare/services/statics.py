@@ -9,6 +9,7 @@
 
 import os
 import mimetypes
+from functools import partial
 
 from webob import exc, response
 from nagare.services import plugin
@@ -29,6 +30,9 @@ class Statics(plugin.Plugin):
         url = url.strip('/')
         url = ('/%s/' % url) if url else '/'
 
+        if isinstance(app, str):
+            app = partial(self.serve_file, app)
+
         self.routes.append((url, app))
         self.routes.sort(key=lambda e: len(e[0]), reverse=True)
 
@@ -48,13 +52,14 @@ class Statics(plugin.Plugin):
                 if chunk:
                     yield chunk
 
-    def serve_file(self, dirname, filename):
+    def serve_file(self, dirname, request, **params):
+        filename = request.path_info
         filename = os.path.normpath(os.path.join(dirname, *filename.split('/')))
 
         if not filename.startswith(dirname + '/') or not os.path.isfile(filename):
             res = exc.HTTPNotFound()
         else:
-            mime, encoding = mimetypes.guess_type(filename)
+            mime, _ = mimetypes.guess_type(filename)
             mime = mime or 'application/octet-stream'
 
             size = os.path.getsize(filename)
@@ -74,17 +79,12 @@ class Statics(plugin.Plugin):
     def handle_request(self, chain, request, **params):
         path_info = request.path_info.rstrip('/')
 
-        for url, dirname in self.routes:
+        for url, app in self.routes:
             if (path_info + '/').startswith(url):
+                request.script_name = request.script_name.rstrip('/') + url[:-1]
+                request.path_info = path_info[len(url) - 1:]
 
-                if dirname:
-                    response = self.serve_file(dirname, path_info[len(url):])
-                else:
-                    request.script_name = request.script_name.rstrip('/') + url[:-1]
-                    request.path_info = path_info[len(url) - 1:]
-
-                    response = chain.next(request=request, **params)
-
+                response = (app or chain.next)(request=request, **params)
                 break
         else:
             response = exc.HTTPNotFound(comment=path_info)

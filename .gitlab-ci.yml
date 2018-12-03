@@ -19,6 +19,6 @@ tests2:
 
 tests3:
   script:
-  - pip3 install --pre flake8 pytest .
-  - flake8 nagare
-  - pytest
+    - pip3 install --pre flake8 pytest .
+    - flake8 nagare
+    - pytest
