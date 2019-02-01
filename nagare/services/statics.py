@@ -9,39 +9,16 @@
 
 import os
 import mimetypes
-from functools import partial
+from operator import itemgetter
 
 from webob import exc, response
 from nagare.services import plugin
 
 
-class Statics(plugin.Plugin):
-    LOAD_PRIORITY = 30
+class DirServer(object):
 
-    def __init__(self, name, dist):
-        super(Statics, self).__init__(name, dist)
-        self.routes = []
-
-    def register_static(self, url, dirname):
-        if os.path.isdir(dirname):
-            self.register(url, os.path.abspath(dirname))
-
-    def register(self, url, app=None):
-        url = url.strip('/')
-        url = ('/%s/' % url) if url else '/'
-
-        if isinstance(app, str):
-            app = partial(self.serve_file, app)
-
-        self.routes.append((url, app))
-        self.routes.sort(key=lambda e: len(e[0]), reverse=True)
-
-    def info(self):
-        super(Statics, self).info()
-
-        print('\nRoutes:\n')
-        for url, dirname in sorted(self.routes):
-            print('  ', url, '->', dirname or '<application>')
+    def __init__(self, dirname):
+        self.dirname = os.path.abspath(dirname)
 
     @staticmethod
     def iter_file(filename, chunk_size=4096):
@@ -52,11 +29,11 @@ class Statics(plugin.Plugin):
                 if chunk:
                     yield chunk
 
-    def serve_file(self, dirname, request, **params):
+    def __call__(self, request, **params):
         filename = request.path_info
-        filename = os.path.normpath(os.path.join(dirname, *filename.split('/')))
+        filename = os.path.normpath(os.path.join(self.dirname, *filename.split('/')))
 
-        if not filename.startswith(dirname + '/') or not os.path.isfile(filename):
+        if not filename.startswith(self.dirname + '/') or not os.path.isfile(filename):
             res = exc.HTTPNotFound()
         else:
             mime, _ = mimetypes.guess_type(filename)
@@ -75,6 +52,36 @@ class Statics(plugin.Plugin):
             res.etag = '%s-%s-%s' % (time, size, hash(filename))
 
         return res
+
+    def __str__(self):
+        return self.dirname
+
+
+class Statics(plugin.Plugin):
+    LOAD_PRIORITY = 30
+
+    def __init__(self, name, dist):
+        super(Statics, self).__init__(name, dist)
+        self.routes = []
+
+    def register_dir(self, url, dirname):
+        if os.path.isdir(dirname):
+            self.register(url, DirServer(dirname))
+
+    def register(self, url, app=None):
+        url = url.strip('/')
+        url = ('/%s/' % url) if url else '/'
+
+        if url in map(itemgetter(0), self.routes):
+            raise ValueError('URL `{}` already registered'.format(url))
+
+        self.routes.append((url, app))
+        self.routes.sort(key=lambda e: len(e[0]), reverse=True)
+
+    def format_info(self):
+        yield 'Routes:'
+        for url, dirname in sorted(self.routes, key=itemgetter(0)):
+            yield '  {} -> {}'.format(url.rstrip('/'), dirname or '<application>')
 
     def handle_request(self, chain, request, **params):
         path_info = request.path_info.rstrip('/')
