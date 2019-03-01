@@ -83,7 +83,10 @@ class Statics(plugin.Plugin):
         for url, dirname in sorted(self.routes, key=itemgetter(0)):
             yield '  {} -> {}'.format(url.rstrip('/'), dirname or '<application>')
 
-    def handle_request(self, chain, request, **params):
+    def handle_request(self, chain, request=None, **params):
+        if request is None:
+            return chain.next(**params)
+
         path_info = request.path_info.rstrip('/')
 
         for url, app in self.routes:
