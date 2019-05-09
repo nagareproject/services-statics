@@ -35,24 +35,24 @@ def dispatch(urls, path_info, script_name):
 
 def test_empty():
     assert dispatch('', '', '') == ('', '')
-    assert dispatch('', '/', '') == ('', '')
+    assert dispatch('', '/', '') == ('/', '')
     assert dispatch('/', '', '') == ('', '')
-    assert dispatch('/', '/', '') == ('', '')
+    assert dispatch('/', '/', '') == ('/', '')
 
     assert dispatch('', '/x', '') == ('/x', '')
-    assert dispatch('', '/x/', '') == ('/x', '')
+    assert dispatch('', '/x/', '') == ('/x/', '')
     assert dispatch('/', '/x', '') == ('/x', '')
-    assert dispatch('/', '/x/', '') == ('/x', '')
+    assert dispatch('/', '/x/', '') == ('/x/', '')
 
     assert dispatch('', '', '/y') == ('', '/y')
-    assert dispatch('', '/', '/y/') == ('', '/y')
+    assert dispatch('', '/', '/y/') == ('/', '/y')
     assert dispatch('/', '', '/y') == ('', '/y')
-    assert dispatch('/', '/', '/y/') == ('', '/y')
+    assert dispatch('/', '/', '/y/') == ('/', '/y')
 
     assert dispatch('', '/x', '/y') == ('/x', '/y')
-    assert dispatch('', '/x/', '/y/') == ('/x', '/y')
+    assert dispatch('', '/x/', '/y/') == ('/x/', '/y')
     assert dispatch('/', '/x', '/y') == ('/x', '/y')
-    assert dispatch('/', '/x/', '/y/') == ('/x', '/y')
+    assert dispatch('/', '/x/', '/y/') == ('/x/', '/y')
 
 
 def test_whole_prefix():
@@ -61,10 +61,10 @@ def test_whole_prefix():
     assert dispatch('demo/', '/demo', '') == ('', '/demo')
     assert dispatch('demo', '/demo', '') == ('', '/demo')
 
-    assert dispatch('/demo', '/demo/', '') == ('', '/demo')
-    assert dispatch('/demo/', '/demo/', '') == ('', '/demo')
-    assert dispatch('demo/', '/demo/', '') == ('', '/demo')
-    assert dispatch('demo', '/demo/', '') == ('', '/demo')
+    assert dispatch('/demo', '/demo/', '') == ('/', '/demo')
+    assert dispatch('/demo/', '/demo/', '') == ('/', '/demo')
+    assert dispatch('demo/', '/demo/', '') == ('/', '/demo')
+    assert dispatch('demo', '/demo/', '') == ('/', '/demo')
 
     assert dispatch('/demo', '/demo', '/y') == ('', '/y/demo')
     assert dispatch('/demo/', '/demo', '/y/') == ('', '/y/demo')
@@ -78,20 +78,20 @@ def test_prefix():
     assert dispatch('demo/', '/demo/x', '') == ('/x', '/demo')
     assert dispatch('demo', '/demo/x', '') == ('/x', '/demo')
 
-    assert dispatch('/demo', '/demo/x/', '') == ('/x', '/demo')
-    assert dispatch('/demo/', '/demo/x/', '') == ('/x', '/demo')
-    assert dispatch('demo/', '/demo/x/', '') == ('/x', '/demo')
-    assert dispatch('demo', '/demo/x/', '') == ('/x', '/demo')
+    assert dispatch('/demo', '/demo/x/', '') == ('/x/', '/demo')
+    assert dispatch('/demo/', '/demo/x/', '') == ('/x/', '/demo')
+    assert dispatch('demo/', '/demo/x/', '') == ('/x/', '/demo')
+    assert dispatch('demo', '/demo/x/', '') == ('/x/', '/demo')
 
     assert dispatch('/demo', '/demo/x', '/y') == ('/x', '/y/demo')
     assert dispatch('/demo/', '/demo/x', '/y') == ('/x', '/y/demo')
     assert dispatch('demo/', '/demo/x', '/y') == ('/x', '/y/demo')
     assert dispatch('demo', '/demo/x', '/y') == ('/x', '/y/demo')
 
-    assert dispatch('/demo', '/demo/x/', '/y') == ('/x', '/y/demo')
-    assert dispatch('/demo/', '/demo/x/', '/y') == ('/x', '/y/demo')
-    assert dispatch('demo/', '/demo/x/', '/y') == ('/x', '/y/demo')
-    assert dispatch('demo', '/demo/x/', '/y') == ('/x', '/y/demo')
+    assert dispatch('/demo', '/demo/x/', '/y') == ('/x/', '/y/demo')
+    assert dispatch('/demo/', '/demo/x/', '/y') == ('/x/', '/y/demo')
+    assert dispatch('demo/', '/demo/x/', '/y') == ('/x/', '/y/demo')
+    assert dispatch('demo', '/demo/x/', '/y') == ('/x/', '/y/demo')
 
 
 def test_not_found():
