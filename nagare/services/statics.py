@@ -92,7 +92,7 @@ class Statics(plugin.Plugin):
         for url, app in self.routes:
             if (path_info + '/').startswith(url):
                 request.script_name = request.script_name.rstrip('/') + url[:-1]
-                request.path_info = path_info[len(url) - 1:]
+                request.path_info = request.path_info[len(url) - 1:]
 
                 response = (app or chain.next)(request=request, **params)
                 break
