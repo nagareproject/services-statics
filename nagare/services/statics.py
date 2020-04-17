@@ -51,6 +51,9 @@ class DirServer(object):
             res.last_modified = time
             res.etag = '%s-%s-%s' % (time, size, hash(filename))
 
+            if filename.endswith('.gz'):
+                res.content_encoding = 'gzip'
+
         return res
 
     def __str__(self):
