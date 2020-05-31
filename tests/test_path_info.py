@@ -28,7 +28,7 @@ def dispatch(urls, path_info, script_name):
         urls = (urls,)
 
     for url in urls:
-        statics.register(url)
+        statics.register_app(url)
 
     return statics.handle_request(Chain(), Request(path_info, script_name))
 
