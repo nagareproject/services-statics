@@ -129,7 +129,7 @@ class Statics(plugin.Plugin):
                 yield '  {} -> {}'.format(url.rstrip('/'), server)
 
     def generate_proxy_directives(self, proxy_service, proxy):
-        for url, server in sorted(self.routes, key=lambda e: (e[1].PROXY_DIRECTIVE_PRIORITY, len(e[0])), reverse=True):
+        for url, server in sorted(self.routes, key=lambda e: (e[1].PROXY_DIRECTIVE_PRIORITY, -len(e[0]))):
             for directive in server.generate_proxy_directives(proxy_service, proxy, url.rstrip('/')):
                 yield directive
 
