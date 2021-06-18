@@ -13,6 +13,7 @@ from operator import itemgetter
 
 from webob import exc, response
 from nagare.services import plugin
+from nagare.server import reference
 
 
 class DirServer(object):
@@ -96,11 +97,15 @@ class WebSocket(object):
 
 
 class Statics(plugin.Plugin):
+    CONFIG_SPEC = dict(plugin.Plugin.CONFIG_SPEC, mountpoints={'___many___': 'string'})
     LOAD_PRIORITY = 30
 
-    def __init__(self, name, dist, **config):
+    def __init__(self, name, dist, mountpoints, **config):
         super(Statics, self).__init__(name, dist, **config)
         self.routes = []
+
+        for route, app_ref in mountpoints.items():
+            self.register(route, reference.load_object(app_ref)[0])
 
     def register(self, url, server):
         url = url.strip('/')
