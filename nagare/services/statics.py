@@ -103,7 +103,7 @@ class Handler(object):
         self.handler = handler
 
     def __call__(self, _, request, params):
-        return self.handler(request, **params)
+        return self.handler(request=request, **params)
 
     def generate_proxy_directives(self, proxy_service, proxy, url):
         return proxy.generate_app_directives(proxy_service, url, url)
