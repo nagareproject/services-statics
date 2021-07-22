@@ -96,26 +96,42 @@ class WebSocket(object):
         return '<websocket>'
 
 
+class Handler(object):
+    PROXY_DIRECTIVE_PRIORITY = 0
+
+    def __init__(self, handler):
+        self.handler = handler
+
+    def __call__(self, _, request, params):
+        return self.handler(request, **params)
+
+    def generate_proxy_directives(self, proxy_service, proxy, url):
+        return proxy.generate_app_directives(proxy_service, url, url)
+
+    def __str__(self):
+        return '{}:{}'.format(self.handler.__module__, self.handler.__name__)
+
+
 class Statics(plugin.Plugin):
     CONFIG_SPEC = dict(plugin.Plugin.CONFIG_SPEC, mountpoints={'___many___': 'string'})
     LOAD_PRIORITY = 30
 
     def __init__(self, name, dist, mountpoints=None, **config):
         super(Statics, self).__init__(name, dist, **config)
-        self.routes = []
+        self._mountpoints = []
 
         for route, app_ref in (mountpoints or {}).items():
-            self.register(route, reference.load_object(app_ref)[0])
+            self.register_handler(route, reference.load_object(app_ref)[0])
 
     def register(self, url, server):
         url = url.strip('/')
         url = ('/%s/' % url) if url else '/'
 
-        if url in map(itemgetter(0), self.routes):
+        if url in map(itemgetter(0), self._mountpoints):
             raise ValueError('URL `{}` already registered'.format(url))
 
-        self.routes.append((url, server))
-        self.routes.sort(key=lambda e: len(e[0]), reverse=True)
+        self._mountpoints.append((url, server))
+        self._mountpoints.sort(key=lambda e: len(e[0]), reverse=True)
 
     def register_dir(self, url, dirname, gzip=False):
         if os.path.isdir(dirname):
@@ -127,14 +143,19 @@ class Statics(plugin.Plugin):
     def register_ws(self, url, on_connect):
         self.register(url, WebSocket(on_connect))
 
-    def format_info(self):
-        if self.routes:
-            yield 'Routes:'
-            for url, server in sorted(self.routes, key=itemgetter(0)):
-                yield '  {} -> {}'.format(url.rstrip('/'), server)
+    def register_handler(self, url, handler):
+        self.register(url, Handler(handler))
+
+    @property
+    def mountpoints(self):
+        return [
+            (url.rstrip('/') or '/', server)
+            for url, server
+            in sorted(self._mountpoints or [], key=itemgetter(0), reverse=True)
+        ]
 
     def generate_proxy_directives(self, proxy_service, proxy):
-        for url, server in sorted(self.routes, key=lambda e: (e[1].PROXY_DIRECTIVE_PRIORITY, -len(e[0]))):
+        for url, server in sorted(self._mountpoints, key=lambda e: (e[1].PROXY_DIRECTIVE_PRIORITY, -len(e[0]))):
             for directive in server.generate_proxy_directives(proxy_service, proxy, url.rstrip('/')):
                 yield directive
 
@@ -144,7 +165,7 @@ class Statics(plugin.Plugin):
 
         path_info = request.path_info.rstrip('/')
 
-        for url, server in self.routes:
+        for url, server in self._mountpoints:
             if (path_info + '/').startswith(url):
                 request.script_name = request.script_name.rstrip('/') + url[:-1]
                 request.path_info = request.path_info[len(url) - 1:]

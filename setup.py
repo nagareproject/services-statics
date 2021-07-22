@@ -32,6 +32,9 @@ setup(
     use_scm_version=True,
     install_requires=['WebOb', 'nagare-services', 'nagare-server'],
     entry_points='''
+        [nagare.commands]
+        mountpoints = nagare.admin.statics_commands:Mountpoints
+
         [nagare.services]
         statics = nagare.services.statics:Statics
     '''
