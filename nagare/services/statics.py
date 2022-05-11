@@ -117,7 +117,7 @@ class Statics(plugin.Plugin):
     LOAD_PRIORITY = 30
 
     def __init__(self, name, dist, mountpoints=None, **config):
-        super(Statics, self).__init__(name, dist, **config)
+        super(Statics, self).__init__(name, dist, mountpoints=mountpoints, **config)
         self._mountpoints = []
 
         for route, app_ref in (mountpoints or {}).items():
@@ -155,8 +155,8 @@ class Statics(plugin.Plugin):
         ]
 
     def generate_proxy_directives(self, proxy_service, proxy):
-        for url, server in sorted(self._mountpoints, key=lambda e: (e[1].PROXY_DIRECTIVE_PRIORITY, -len(e[0]))):
-            for directive in server.generate_proxy_directives(proxy_service, proxy, url.rstrip('/')):
+        for url, server in sorted(self.mountpoints, key=lambda e: (e[1].PROXY_DIRECTIVE_PRIORITY, -len(e[0]))):
+            for directive in server.generate_proxy_directives(proxy_service, proxy, url):
                 yield directive
 
     def handle_request(self, chain, request=None, **params):
