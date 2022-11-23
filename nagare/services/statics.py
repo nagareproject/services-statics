@@ -36,26 +36,31 @@ class DirServer(object):
         filename = request.path_info
         filename = os.path.normpath(os.path.join(self.dirname, *filename.split('/')))
 
-        if not filename.startswith(self.dirname + '/') or not os.path.isfile(filename):
-            res = exc.HTTPNotFound()
-        else:
-            mime, _ = mimetypes.guess_type(filename)
-            mime = mime or 'application/octet-stream'
+        if not filename.startswith(self.dirname + '/'):
+            return exc.HTTPNotFound()
 
-            size = os.path.getsize(filename)
-            time = os.path.getmtime(filename)
+        if self.gzip and os.path.isfile(filename + '.gz'):
+            filename += '.gz'
+        elif not os.path.isfile(filename):
+            return exc.HTTPNotFound()
 
-            res = response.Response(
-                content_type=mime,
-                content_length=size,
-                app_iter=self.iter_file(filename),
-                conditional_response=True
-            )
-            res.last_modified = time
-            res.etag = '%s-%s-%s' % (time, size, hash(filename))
+        mime, _ = mimetypes.guess_type(filename)
+        mime = mime or 'application/octet-stream'
 
-            if filename.endswith('.gz'):
-                res.content_encoding = 'gzip'
+        size = os.path.getsize(filename)
+        time = os.path.getmtime(filename)
+
+        res = response.Response(
+            content_type=mime,
+            content_length=size,
+            app_iter=self.iter_file(filename),
+            conditional_response=True
+        )
+        res.last_modified = time
+        res.etag = '%s-%s-%s' % (time, size, hash(filename))
+
+        if filename.endswith('.gz'):
+            res.content_encoding = 'gzip'
 
         return res
 
