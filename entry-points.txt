@@ -1,0 +1,5 @@
+[nagare.commands]
+mountpoints = nagare.admin.statics_commands:Mountpoints
+
+[nagare.services]
+statics = nagare.services.statics:Statics

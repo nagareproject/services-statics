@@ -1,5 +1,5 @@
 # --
-# Copyright (c) 2008-2022 Net-ng.
+# Copyright (c) 2008-2023 Net-ng.
 # All rights reserved.
 #
 # This software is licensed under the BSD License, as described in
@@ -7,13 +7,13 @@
 # this distribution.
 # --
 
-import os
 import mimetypes
 from operator import itemgetter
+import os
 
-from webob import exc, response
-from nagare.services import plugin
 from nagare.server import reference
+from nagare.services import plugin
+from webob import exc, response
 
 
 class DirServer(object):
@@ -51,10 +51,7 @@ class DirServer(object):
         time = os.path.getmtime(filename)
 
         res = response.Response(
-            content_type=mime,
-            content_length=size,
-            app_iter=self.iter_file(filename),
-            conditional_response=True
+            content_type=mime, content_length=size, app_iter=self.iter_file(filename), conditional_response=True
         )
         res.last_modified = time
         res.etag = '%s-%s-%s' % (time, size, hash(filename))
@@ -155,8 +152,7 @@ class Statics(plugin.Plugin):
     def mountpoints(self):
         return [
             (url.rstrip('/') or '/', server)
-            for url, server
-            in sorted(self._mountpoints or [], key=itemgetter(0), reverse=True)
+            for url, server in sorted(self._mountpoints or [], key=itemgetter(0), reverse=True)
         ]
 
     def generate_proxy_directives(self, proxy_service, proxy):
@@ -173,7 +169,7 @@ class Statics(plugin.Plugin):
         for url, server in self._mountpoints:
             if (path_info + '/').startswith(url):
                 request.script_name = request.script_name.rstrip('/') + url[:-1]
-                request.path_info = request.path_info[len(url) - 1:]
+                request.path_info = request.path_info[len(url) - 1 :]
 
                 response = server(chain, request, params)
                 break

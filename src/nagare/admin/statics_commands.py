@@ -1,5 +1,5 @@
 # --
-# Copyright (c) 2008-2022 Net-ng.
+# Copyright (c) 2008-2023 Net-ng.
 # All rights reserved.
 #
 # This software is licensed under the BSD License, as described in
@@ -16,9 +16,12 @@ class Mountpoints(command.Command):
 
     def set_arguments(self, parser):
         parser.add_argument(
-            '-u', '--url',
-            action='append', dest='urls', metavar='URL',
-            help='display the mountpoints for the given URLs'
+            '-u',
+            '--url',
+            action='append',
+            dest='urls',
+            metavar='URL',
+            help='display the mountpoints for the given URLs',
         )
 
         super(Mountpoints, self).set_arguments(parser)
