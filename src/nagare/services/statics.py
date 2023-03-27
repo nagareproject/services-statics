@@ -36,7 +36,7 @@ class DirServer(object):
         filename = request.path_info
         filename = os.path.normpath(os.path.join(self.dirname, *filename.split('/')))
 
-        if not filename.startswith(self.dirname + '/'):
+        if not filename.startswith(self.dirname + os.sep):
             return exc.HTTPNotFound()
 
         if self.gzip and os.path.isfile(filename + '.gz'):
