@@ -15,13 +15,16 @@ from nagare.server import reference
 from nagare.services import plugin
 from webob import exc, response
 
+DEFAULT_CHUNK_SIZE = 4096
 
-class DirServer(object):
+
+class FileHandler(object):
     PROXY_DIRECTIVE_PRIORITY = 2
 
-    def __init__(self, dirname, gzip=False):
-        self.dirname = os.path.abspath(dirname)
+    def __init__(self, filename, gzip=False, chunk_size=DEFAULT_CHUNK_SIZE):
+        self.filename = os.path.abspath(filename)
         self.gzip = gzip
+        self.chunk_size = chunk_size
 
     @staticmethod
     def iter_file(filename, chunk_size=4096):
@@ -33,13 +36,8 @@ class DirServer(object):
                     yield chunk
 
     def __call__(self, _, request, params):
-        filename = request.path_info
-        filename = os.path.normpath(os.path.join(self.dirname, *filename.split('/')))
-
-        if not filename.startswith(self.dirname + os.sep):
-            return exc.HTTPNotFound()
-
-        if self.gzip and os.path.isfile(filename + '.gz'):
+        filename = self.filename
+        if self.gzip and os.path.isfile(self.filename + '.gz'):
             filename += '.gz'
         elif not os.path.isfile(filename):
             return exc.HTTPNotFound()
@@ -62,13 +60,37 @@ class DirServer(object):
         return res
 
     def generate_proxy_directives(self, proxy_service, proxy, url):
+        return proxy.generate_file_directives(proxy_service, url, self.filename, self.gzip)
+
+    def __str__(self):
+        return 'file ' + self.filename
+
+
+class DirHandler(object):
+    PROXY_DIRECTIVE_PRIORITY = 3
+
+    def __init__(self, dirname, gzip=False, chunk_size=DEFAULT_CHUNK_SIZE):
+        self.dirname = os.path.abspath(dirname)
+        self.gzip = gzip
+        self.chunk_size = chunk_size
+
+    def __call__(self, chain, request, params):
+        filename = request.path_info
+        filename = os.path.normpath(os.path.join(self.dirname, *filename.split('/')))
+
+        if not filename.startswith(self.dirname + os.sep):
+            return exc.HTTPNotFound()
+
+        return FileHandler(filename, self.gzip, self.chunk_size)(chain, request, params)
+
+    def generate_proxy_directives(self, proxy_service, proxy, url):
         return proxy.generate_dir_directives(proxy_service, url, self.dirname, self.gzip)
 
     def __str__(self):
-        return self.dirname
+        return 'directory ' + self.dirname
 
 
-class App(object):
+class AppHandler(object):
     PROXY_DIRECTIVE_PRIORITY = 0
 
     @staticmethod
@@ -76,13 +98,13 @@ class App(object):
         return chain.next(request=request, **params)
 
     def __str__(self):
-        return '<application>'
+        return 'application'
 
     def generate_proxy_directives(self, proxy_service, proxy, url):
         return proxy.generate_app_directives(proxy_service, url)
 
 
-class WebSocket(object):
+class WebSocketHandler(object):
     PROXY_DIRECTIVE_PRIORITY = 1
 
     def __init__(self, on_connect):
@@ -95,7 +117,7 @@ class WebSocket(object):
         return proxy.generate_ws_directives(proxy_service, url)
 
     def __str__(self):
-        return '<websocket>'
+        return 'websocket'
 
 
 class Handler(object):
@@ -111,16 +133,29 @@ class Handler(object):
         return proxy.generate_app_directives(proxy_service, url, url)
 
     def __str__(self):
-        return '{}:{}'.format(self.handler.__module__, self.handler.__name__)
+        return 'handler {}:{}'.format(self.handler.__module__, self.handler.__name__)
 
 
 class Statics(plugin.Plugin):
-    CONFIG_SPEC = dict(plugin.Plugin.CONFIG_SPEC, mountpoints={'___many___': 'string'})
+    CONFIG_SPEC = dict(
+        plugin.Plugin.CONFIG_SPEC,
+        files={'___many___': 'string'},
+        directories={'___many___': 'string'},
+        mountpoints={'___many___': 'string'},
+    )
     LOAD_PRIORITY = 30
 
-    def __init__(self, name, dist, mountpoints=None, **config):
-        super(Statics, self).__init__(name, dist, mountpoints=mountpoints, **config)
+    def __init__(self, name, dist, files=None, directories=None, mountpoints=None, **config):
+        super(Statics, self).__init__(
+            name, dist, files=files, directories=directories, mountpoints=mountpoints, **config
+        )
         self._mountpoints = []
+
+        for route, filename in (files or {}).items():
+            self.register_file(route, filename)
+
+        for route, dirname in (directories or {}).items():
+            self.register_dir(route, dirname)
 
         for route, app_ref in (mountpoints or {}).items():
             self.register_handler(route, reference.load_object(app_ref)[0])
@@ -135,15 +170,19 @@ class Statics(plugin.Plugin):
         self._mountpoints.append((url, server))
         self._mountpoints.sort(key=lambda e: len(e[0]), reverse=True)
 
-    def register_dir(self, url, dirname, gzip=False):
+    def register_file(self, url, filename, gzip=False, chunk_size=DEFAULT_CHUNK_SIZE):
+        if os.path.isfile(filename):
+            self.register(url, FileHandler(filename, gzip, chunk_size))
+
+    def register_dir(self, url, dirname, gzip=False, chunk_size=DEFAULT_CHUNK_SIZE):
         if os.path.isdir(dirname):
-            self.register(url, DirServer(dirname, gzip))
+            self.register(url, DirHandler(dirname, gzip, chunk_size))
 
     def register_app(self, url):
-        self.register(url, App())
+        self.register(url, AppHandler())
 
     def register_ws(self, url, on_connect):
-        self.register(url, WebSocket(on_connect))
+        self.register(url, WebSocketHandler(on_connect))
 
     def register_handler(self, url, handler):
         self.register(url, Handler(handler))
