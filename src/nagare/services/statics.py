@@ -13,7 +13,7 @@ import os
 
 from nagare.server import reference
 from nagare.services import plugin
-from webob import exc, response
+from webob.exc import HTTPNotFound, HTTPOk
 
 DEFAULT_CHUNK_SIZE = 4096
 
@@ -26,6 +26,9 @@ class FileHandler(object):
         self.gzip = gzip
         self.chunk_size = chunk_size
 
+    def __call__(self, chain, request, params):
+        return self.generate_response(request, params['response'])
+
     @staticmethod
     def iter_file(filename, chunk_size=4096):
         with open(filename, 'rb') as fileobj:
@@ -35,12 +38,12 @@ class FileHandler(object):
                 if chunk:
                     yield chunk
 
-    def __call__(self, _, request, params):
+    def generate_response(self, request, response):
         filename = self.filename
         if self.gzip and os.path.isfile(self.filename + '.gz'):
             filename += '.gz'
         elif not os.path.isfile(filename):
-            return exc.HTTPNotFound()
+            return HTTPNotFound()
 
         mime, _ = mimetypes.guess_type(filename)
         mime = mime or 'application/octet-stream'
@@ -48,7 +51,7 @@ class FileHandler(object):
         size = os.path.getsize(filename)
         time = os.path.getmtime(filename)
 
-        res = response.Response(
+        res = HTTPOk(
             content_type=mime, content_length=size, app_iter=self.iter_file(filename), conditional_response=True
         )
         res.last_modified = time
@@ -75,13 +78,20 @@ class DirHandler(object):
         self.chunk_size = chunk_size
 
     def __call__(self, chain, request, params):
-        filename = request.path_info
+        return self.generate_response(request, params['response'])
+
+    def generate_response(self, request, response, filename=None):
+        filename = filename or request.path_info
         filename = os.path.normpath(os.path.join(self.dirname, *filename.split('/')))
 
-        if not filename.startswith(self.dirname + os.sep):
-            return exc.HTTPNotFound()
+        return self.generate_file_response(request, response, filename)
 
-        return FileHandler(filename, self.gzip, self.chunk_size)(chain, request, params)
+    def generate_file_response(self, request, response, filename):
+        return (
+            FileHandler(filename, self.gzip, self.chunk_size).generate_response(request, response)
+            if filename.startswith(self.dirname + os.sep)
+            else HTTPNotFound()
+        )
 
     def generate_proxy_directives(self, proxy_service, proxy, url):
         return proxy.generate_dir_directives(proxy_service, url, self.dirname, self.gzip)
@@ -160,14 +170,14 @@ class Statics(plugin.Plugin):
         for route, app_ref in (mountpoints or {}).items():
             self.register_handler(route, reference.load_object(app_ref)[0])
 
-    def register(self, url, server):
+    def register(self, url, handler):
         url = url.strip('/')
         url = ('/%s/' % url) if url else '/'
 
         if url in map(itemgetter(0), self._mountpoints):
             raise ValueError('URL `{}` already registered'.format(url))
 
-        self._mountpoints.append((url, server))
+        self._mountpoints.append((url, handler))
         self._mountpoints.sort(key=lambda e: len(e[0]), reverse=True)
 
     def register_file(self, url, filename, gzip=False, chunk_size=DEFAULT_CHUNK_SIZE):
@@ -190,13 +200,13 @@ class Statics(plugin.Plugin):
     @property
     def mountpoints(self):
         return [
-            (url.rstrip('/') or '/', server)
-            for url, server in sorted(self._mountpoints or [], key=itemgetter(0), reverse=True)
+            (url.rstrip('/') or '/', handler)
+            for url, handler in sorted(self._mountpoints or [], key=itemgetter(0), reverse=True)
         ]
 
     def generate_proxy_directives(self, proxy_service, proxy):
-        for url, server in sorted(self.mountpoints, key=lambda e: (e[1].PROXY_DIRECTIVE_PRIORITY, -len(e[0]))):
-            for directive in server.generate_proxy_directives(proxy_service, proxy, url):
+        for url, handler in sorted(self.mountpoints, key=lambda e: (e[1].PROXY_DIRECTIVE_PRIORITY, -len(e[0]))):
+            for directive in handler.generate_proxy_directives(proxy_service, proxy, url):
                 yield directive
 
     def handle_request(self, chain, request=None, **params):
@@ -205,14 +215,14 @@ class Statics(plugin.Plugin):
 
         path_info = request.path_info.rstrip('/')
 
-        for url, server in self._mountpoints:
+        for url, handler in self._mountpoints:
             if (path_info + '/').startswith(url):
                 request.script_name = request.script_name.rstrip('/') + url[:-1]
                 request.path_info = request.path_info[len(url) - 1 :]
 
-                response = server(chain, request, params)
+                response = handler(chain, request, params)
                 break
         else:
-            response = exc.HTTPNotFound(comment=path_info)
+            response = HTTPNotFound(comment=path_info)
 
         return response

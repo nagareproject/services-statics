@@ -7,7 +7,7 @@
 # this distribution.
 # --
 
-from nagare.services.statics import exc, Statics
+from nagare.services.statics import HTTPNotFound, Statics
 
 
 class Request(object):
@@ -98,8 +98,8 @@ def test_not_found():
     assert dispatch('', '', '') == ('', '')
     assert dispatch('', '/x', '') == ('/x', '')
 
-    assert isinstance(dispatch('/demo', '', ''), exc.HTTPNotFound)
-    assert isinstance(dispatch('/demo', '/x', ''), exc.HTTPNotFound)
+    assert isinstance(dispatch('/demo', '', ''), HTTPNotFound)
+    assert isinstance(dispatch('/demo', '/x', ''), HTTPNotFound)
 
 
 def test_sorted():
