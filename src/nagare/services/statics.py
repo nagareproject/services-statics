@@ -66,7 +66,7 @@ class FileHandler(object):
         return proxy.generate_file_directives(proxy_service, url, self.filename, self.gzip)
 
     def __str__(self):
-        return 'file ' + self.filename
+        return 'file {} [gzip={},chunk_size={}]'.format(self.filename, self.gzip, self.chunk_size)
 
 
 class DirHandler(object):
@@ -97,7 +97,7 @@ class DirHandler(object):
         return proxy.generate_dir_directives(proxy_service, url, self.dirname, self.gzip)
 
     def __str__(self):
-        return 'directory ' + self.dirname
+        return 'directory {} [gzip={},chunk_size={}]'.format(self.dirname, self.gzip, self.chunk_size)
 
 
 class AppHandler(object):
@@ -133,11 +133,12 @@ class WebSocketHandler(object):
 class Handler(object):
     PROXY_DIRECTIVE_PRIORITY = 0
 
-    def __init__(self, handler):
+    def __init__(self, handler, services):
         self.handler = handler
+        self.services = services
 
     def __call__(self, _, request, params):
-        return self.handler(request=request, **params)
+        return self.services(self.handler, request=request, **params)
 
     def generate_proxy_directives(self, proxy_service, proxy, url):
         return proxy.generate_app_directives(proxy_service, url, url)
@@ -155,10 +156,11 @@ class Statics(plugin.Plugin):
     )
     LOAD_PRIORITY = 30
 
-    def __init__(self, name, dist, files=None, directories=None, mountpoints=None, **config):
+    def __init__(self, name, dist, files=None, directories=None, mountpoints=None, services_service=None, **config):
         super(Statics, self).__init__(
             name, dist, files=files, directories=directories, mountpoints=mountpoints, **config
         )
+        self.services = services_service
         self._mountpoints = []
 
         for route, filename in (files or {}).items():
@@ -195,7 +197,7 @@ class Statics(plugin.Plugin):
         self.register(url, WebSocketHandler(on_connect))
 
     def register_handler(self, url, handler):
-        self.register(url, Handler(handler))
+        self.register(url, Handler(handler, self.services))
 
     @property
     def mountpoints(self):
