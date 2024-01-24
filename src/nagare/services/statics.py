@@ -1,5 +1,5 @@
 # --
-# Copyright (c) 2008-2023 Net-ng.
+# Copyright (c) 2008-2024 Net-ng.
 # All rights reserved.
 #
 # This software is licensed under the BSD License, as described in
@@ -7,13 +7,14 @@
 # this distribution.
 # --
 
+import os
 import mimetypes
 from operator import itemgetter
-import os
+
+from webob.exc import HTTPOk, HTTPNotFound
 
 from nagare.server import reference
 from nagare.services import plugin
-from webob.exc import HTTPNotFound, HTTPOk
 
 DEFAULT_CHUNK_SIZE = 4096
 
