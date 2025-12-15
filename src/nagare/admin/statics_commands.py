@@ -1,5 +1,5 @@
 # --
-# Copyright (c) 2008-2024 Net-ng.
+# Copyright (c) 2014-2025 Net-ng.
 # All rights reserved.
 #
 # This software is licensed under the BSD License, as described in
@@ -24,7 +24,7 @@ class Mountpoints(command.Command):
             help='display the mountpoints for the given URLs',
         )
 
-        super(Mountpoints, self).set_arguments(parser)
+        super().set_arguments(parser)
 
     @staticmethod
     def run(statics_service, urls):

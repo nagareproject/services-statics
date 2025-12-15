@@ -1,5 +1,5 @@
 # --
-# Copyright (c) 2008-2024 Net-ng.
+# Copyright (c) 2014-2025 Net-ng.
 # All rights reserved.
 #
 # This software is licensed under the BSD License, as described in
@@ -19,7 +19,7 @@ from nagare.services import plugin
 DEFAULT_CHUNK_SIZE = 4096
 
 
-class FileHandler(object):
+class FileHandler:
     PROXY_DIRECTIVE_PRIORITY = 2
 
     def __init__(self, filename, gzip=False, chunk_size=DEFAULT_CHUNK_SIZE):
@@ -67,10 +67,10 @@ class FileHandler(object):
         return proxy.generate_file_directives(proxy_service, url, self.filename, self.gzip)
 
     def __str__(self):
-        return 'file {} [gzip={},chunk_size={}]'.format(self.filename, self.gzip, self.chunk_size)
+        return f'file {self.filename} [gzip={self.gzip},chunk_size={self.chunk_size}]'
 
 
-class DirHandler(object):
+class DirHandler:
     PROXY_DIRECTIVE_PRIORITY = 3
 
     def __init__(self, dirname, gzip=False, chunk_size=DEFAULT_CHUNK_SIZE):
@@ -98,10 +98,10 @@ class DirHandler(object):
         return proxy.generate_dir_directives(proxy_service, url, self.dirname, self.gzip)
 
     def __str__(self):
-        return 'directory {} [gzip={},chunk_size={}]'.format(self.dirname, self.gzip, self.chunk_size)
+        return f'directory {self.dirname} [gzip={self.gzip},chunk_size={self.chunk_size}]'
 
 
-class AppHandler(object):
+class AppHandler:
     PROXY_DIRECTIVE_PRIORITY = 0
 
     @staticmethod
@@ -115,7 +115,7 @@ class AppHandler(object):
         return proxy.generate_app_directives(proxy_service, url)
 
 
-class WebSocketHandler(object):
+class WebSocketHandler:
     PROXY_DIRECTIVE_PRIORITY = 1
 
     def __init__(self, on_connect):
@@ -131,7 +131,7 @@ class WebSocketHandler(object):
         return 'websocket'
 
 
-class Handler(object):
+class Handler:
     PROXY_DIRECTIVE_PRIORITY = 0
 
     def __init__(self, handler, services):
@@ -145,22 +145,19 @@ class Handler(object):
         return proxy.generate_app_directives(proxy_service, url, url)
 
     def __str__(self):
-        return 'handler {}:{}'.format(self.handler.__module__, self.handler.__name__)
+        return f'handler {self.handler.__module__}:{self.handler.__name__}'
 
 
 class Statics(plugin.Plugin):
-    CONFIG_SPEC = dict(
-        plugin.Plugin.CONFIG_SPEC,
-        files={'___many___': 'string'},
-        directories={'___many___': 'string'},
-        mountpoints={'___many___': 'string'},
-    )
+    CONFIG_SPEC = plugin.Plugin.CONFIG_SPEC | {
+        'files': {'___many___': 'string'},
+        'directories': {'___many___': 'string'},
+        'mountpoints': {'___many___': 'string'},
+    }
     LOAD_PRIORITY = 30
 
     def __init__(self, name, dist, files=None, directories=None, mountpoints=None, services_service=None, **config):
-        super(Statics, self).__init__(
-            name, dist, files=files, directories=directories, mountpoints=mountpoints, **config
-        )
+        super().__init__(name, dist, files=files, directories=directories, mountpoints=mountpoints, **config)
         self.services = services_service
         self._mountpoints = []
 
@@ -175,10 +172,10 @@ class Statics(plugin.Plugin):
 
     def register(self, url, handler):
         url = url.strip('/')
-        url = ('/%s/' % url) if url else '/'
+        url = f'/{url}/' if url else '/'
 
         if url in map(itemgetter(0), self._mountpoints):
-            raise ValueError('URL `{}` already registered'.format(url))
+            raise ValueError(f'URL `{url}` already registered')
 
         self._mountpoints.append((url, handler))
         self._mountpoints.sort(key=lambda e: len(e[0]), reverse=True)

@@ -1,5 +1,5 @@
 # --
-# Copyright (c) 2008-2024 Net-ng.
+# Copyright (c) 2014-2025 Net-ng.
 # All rights reserved.
 #
 # This software is licensed under the BSD License, as described in
@@ -7,16 +7,16 @@
 # this distribution.
 # --
 
-from nagare.services.statics import HTTPNotFound, Statics
+from nagare.services.statics import Statics, HTTPNotFound
 
 
-class Request(object):
+class Request:
     def __init__(self, path_info, script_name=''):
         self.path_info = path_info
         self.script_name = script_name
 
 
-class Chain(object):
+class Chain:
     def next(self, request):
         return request.path_info, request.script_name
 
