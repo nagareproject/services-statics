@@ -26,6 +26,7 @@ requires-python = '>=3.9'
 dependencies = [
     'WebOb',
     "legacy-cgi ; python_full_version>='3.13.0a1'",
+    'ws4py',
     'nagare-services',
     'nagare-server'
 ]
