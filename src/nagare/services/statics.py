@@ -9,9 +9,13 @@
 
 import os
 import mimetypes
+import selectors
+import threading
 from operator import itemgetter
 
+from ws4py import manager, websocket
 from webob.exc import HTTPOk, HTTPNotFound
+from ws4py.server.wsgiutils import WebSocketWSGIApplication
 
 from nagare.server import reference
 from nagare.services import plugin
@@ -115,14 +119,78 @@ class AppHandler:
         return proxy.generate_app_directives(proxy_service, url)
 
 
-class WebSocketHandler:
+class Selector:
+    def __init__(self, timeout=0.1):
+        self.timeout = timeout
+        self.selector = selectors.DefaultSelector()
+
+    def release(self):
+        self.selector.close()
+
+    def register(self, fd):
+        self.selector.register(fd, selectors.EVENT_READ)
+
+    def unregister(self, fd):
+        self.selector.unregister(fd)
+
+    def poll(self):
+        for event, _ in self.selector.select(self.timeout):
+            yield event.fd
+
+
+class WebSocket(websocket.WebSocket):
+    def __init__(self, *args, **kw):
+        super().__init__(*args, **kw)
+        self.cond = threading.Event()
+
+    def join(self):
+        self.cond.wait()
+
+    def closed(self, close, reason=None):
+        self.on_close(close, reason)
+        self.cond.set()
+
+    def close_connection(self):
+        pass
+
+
+class WebSocketHandler(manager.WebSocketManager):
     PROXY_DIRECTIVE_PRIORITY = 1
+    POLLER_FACTORY = Selector
 
-    def __init__(self, on_connect):
-        self.on_connect = on_connect
+    def __init__(self, on_connect, on_receive, on_close):
+        super().__init__(self.POLLER_FACTORY())
 
-    def __call__(self, _, request, params):
-        self.on_connect(request=request, **params)
+        self.websocket_factory = type(
+            'WebSocket',
+            (WebSocket,),
+            {
+                'opened': lambda self: on_connect(self),
+                'received_message': lambda self, msg: on_receive(self, msg),
+                'on_close': lambda self, code, reason=None: on_close(self, code, reason),
+            },
+        )
+
+    def __call__(self, chain, request, params):
+        environ = request.environ
+
+        WebSocketWSGIApplication(handler_cls=self.websocket_factory)(
+            environ,
+            lambda msg, headers: environ['ws4py.socket'].sendall(
+                'HTTP/1.1 {}\r\n{}\r\n\r\n'.format(
+                    msg, '\r\n'.join(f'{name}: {value}' for name, value in headers)
+                ).encode('utf-8')
+            ),
+        )
+
+        websocket = environ['ws4py.websocket']
+        self.add(websocket)
+
+        if not self.is_alive():
+            self.start()
+
+        websocket.join()
+        return params['response']
 
     def generate_proxy_directives(self, proxy_service, proxy, url):
         return proxy.generate_ws_directives(proxy_service, url)
@@ -180,22 +248,34 @@ class Statics(plugin.Plugin):
         self._mountpoints.append((url, handler))
         self._mountpoints.sort(key=lambda e: len(e[0]), reverse=True)
 
+        return handler
+
     def register_file(self, url, filename, gzip=False, chunk_size=DEFAULT_CHUNK_SIZE):
-        if os.path.isfile(filename):
-            self.register(url, FileHandler(filename, gzip, chunk_size))
+        if not os.path.isfile(filename):
+            return None
+
+        return self.register(url, FileHandler(filename, gzip, chunk_size))
 
     def register_dir(self, url, dirname, gzip=False, chunk_size=DEFAULT_CHUNK_SIZE):
-        if os.path.isdir(dirname):
-            self.register(url, DirHandler(dirname, gzip, chunk_size))
+        if not os.path.isdir(dirname):
+            return None
+
+        return self.register(url, DirHandler(dirname, gzip, chunk_size))
 
     def register_app(self, url):
-        self.register(url, AppHandler())
+        return self.register(url, AppHandler())
 
-    def register_ws(self, url, on_connect):
-        self.register(url, WebSocketHandler(on_connect))
+    def register_ws(
+        self,
+        url,
+        on_connect=lambda websocket: None,
+        on_receive=lambda wesocket, msg: None,
+        on_close=lambda websocket, code, reason: None,
+    ):
+        return self.register(url, WebSocketHandler(on_connect, on_receive, on_close))
 
     def register_handler(self, url, handler):
-        self.register(url, Handler(handler, self.services))
+        return self.register(url, Handler(handler, self.services))
 
     @property
     def mountpoints(self):
