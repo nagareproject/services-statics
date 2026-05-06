@@ -8,6 +8,7 @@
 # --
 
 import os
+import queue
 import mimetypes
 import selectors
 import threading
@@ -199,6 +200,82 @@ class WebSocketHandler(manager.WebSocketManager):
         return 'websocket'
 
 
+class SSEStream:
+    def __init__(self, heartbeat=None):
+        self.heartbeat = heartbeat
+
+        self.id = 0
+        self.queue = queue.Queue()
+
+    @staticmethod
+    def format_event(event, data=''):
+        return f'event: {event}\ndata: {data}'
+
+    def send(self, msg):
+        self.queue.put(msg)
+
+    def send_event(self, event, data):
+        self.send(self.format_event(event, data))
+
+    def __next__(self):
+        try:
+            msg = self.queue.get(timeout=self.heartbeat)
+        except queue.Empty:
+            msg = self.format_event('ping')
+
+        self.id += 1
+        return f'id: {self.id}\n{msg}\n\n'.encode('utf-8')
+
+    def __iter__(self):
+        return self
+
+
+class SSEHandler:
+    PROXY_DIRECTIVE_PRIORITY = 0
+
+    def __init__(self, on_open, on_close, heartbeat=3):
+        self.on_open = on_open
+        self.on_close = on_close
+        self.heartbeat = heartbeat
+
+        self.streams = set()
+
+    def add(self, stream, request):
+        self.streams.add(stream)
+        self.on_open(stream, request)
+
+    def remove(self, stream):
+        self.streams.remove(stream)
+        self.on_close(stream)
+
+    def broadcast(self, event, data):
+        for stream in self.streams:
+            stream.send_event(event, data)
+
+    def __call__(self, chain, request, params):
+        response = params['response']
+
+        if request.headers.get('accept', '') == 'text/event-stream':
+            sse = SSEStream(self.heartbeat)
+            sse.close = lambda: self.remove(sse)
+
+            self.add(sse, request)
+
+            response.content_type = 'text/event-stream'
+            response.cache_control = 'no-cache'
+            response.headers['Connection'] = 'keep-alive'
+
+            response.app_iter = sse
+
+        return response
+
+    def generate_proxy_directives(self, proxy_service, proxy, url):
+        return proxy.generate_app_directives(proxy_service, url)
+
+    def __str__(self):
+        return 'sse'
+
+
 class Handler:
     PROXY_DIRECTIVE_PRIORITY = 0
 
@@ -218,14 +295,34 @@ class Handler:
 
 class Statics(plugin.Plugin):
     CONFIG_SPEC = plugin.Plugin.CONFIG_SPEC | {
+        'sse_heartbeat': 'float(default=3, help="`ping` command sending delay, in seconds")',
         'files': {'___many___': 'string'},
         'directories': {'___many___': 'string'},
         'mountpoints': {'___many___': 'string'},
     }
     LOAD_PRIORITY = 30
 
-    def __init__(self, name, dist, files=None, directories=None, mountpoints=None, services_service=None, **config):
-        super().__init__(name, dist, files=files, directories=directories, mountpoints=mountpoints, **config)
+    def __init__(
+        self,
+        name,
+        dist,
+        sse_heartbeat=3,
+        files=None,
+        directories=None,
+        mountpoints=None,
+        services_service=None,
+        **config,
+    ):
+        super().__init__(
+            name,
+            dist,
+            sse_heartbeat=sse_heartbeat,
+            files=files,
+            directories=directories,
+            mountpoints=mountpoints,
+            **config,
+        )
+        self.sse_heartbeat = sse_heartbeat
         self.services = services_service
         self._mountpoints = []
 
@@ -273,6 +370,9 @@ class Statics(plugin.Plugin):
         on_close=lambda websocket, code, reason: None,
     ):
         return self.register(url, WebSocketHandler(on_connect, on_receive, on_close))
+
+    def register_sse(self, url, on_connect=lambda sse, request: None, on_close=lambda sse: None):
+        return self.register(url, SSEHandler(on_connect, on_close, self.sse_heartbeat))
 
     def register_handler(self, url, handler):
         return self.register(url, Handler(handler, self.services))
