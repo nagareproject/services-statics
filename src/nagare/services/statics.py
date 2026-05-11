@@ -242,6 +242,7 @@ class SSEHandler:
 
     def add(self, stream, request):
         self.streams.add(stream)
+        self.broadcast('ping', '')
         self.on_open(stream, request)
 
     def remove(self, stream):
