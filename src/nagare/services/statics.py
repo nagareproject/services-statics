@@ -201,10 +201,11 @@ class WebSocketHandler(manager.WebSocketManager):
 
 
 class SSEStream:
-    def __init__(self, heartbeat=None):
+    def __init__(self, id_, heartbeat=None):
+        self.id = id_ or id(self)
         self.heartbeat = heartbeat
 
-        self.id = 0
+        self.msg_id = 0
         self.queue = queue.Queue()
 
     @staticmethod
@@ -217,14 +218,20 @@ class SSEStream:
     def send_event(self, event, data):
         self.send(self.format_event(event, data))
 
+    def shutdown(self):
+        self.send('')
+
     def __next__(self):
         try:
             msg = self.queue.get(timeout=self.heartbeat)
         except queue.Empty:
             msg = self.format_event('ping')
 
-        self.id += 1
-        return f'id: {self.id}\n{msg}\n\n'.encode('utf-8')
+        if not msg:
+            raise StopIteration()
+
+        self.msg_id += 1
+        return f'id: {self.msg_id}\n{msg}\n\n'.encode('utf-8')
 
     def __iter__(self):
         return self
@@ -238,26 +245,33 @@ class SSEHandler:
         self.on_close = on_close
         self.heartbeat = heartbeat
 
-        self.streams = set()
+        self.streams = {}
 
     def add(self, stream, request):
-        self.streams.add(stream)
-        self.broadcast('ping', '')
+        old_stream = self.streams.get(stream.id)
+        if old_stream is not None:
+            old_stream.id = None
+            old_stream.shutdown()
+
+        self.streams[stream.id] = stream
+
         self.on_open(stream, request)
 
     def remove(self, stream):
-        self.streams.remove(stream)
+        if stream.id is not None:
+            del self.streams[stream.id]
+
         self.on_close(stream)
 
     def broadcast(self, event, data):
-        for stream in self.streams:
+        for stream in self.streams.values():
             stream.send_event(event, data)
 
     def __call__(self, chain, request, params):
         response = params['response']
 
         if request.headers.get('accept', '') == 'text/event-stream':
-            sse = SSEStream(self.heartbeat)
+            sse = SSEStream(request.params.get('sse_id'), self.heartbeat)
             sse.close = lambda: self.remove(sse)
 
             self.add(sse, request)
