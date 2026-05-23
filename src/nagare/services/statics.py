@@ -25,6 +25,7 @@ DEFAULT_CHUNK_SIZE = 4096
 
 
 class FileHandler:
+    TYPE = 'file'
     PROXY_DIRECTIVE_PRIORITY = 2
 
     def __init__(self, filename, gzip=False, chunk_size=DEFAULT_CHUNK_SIZE):
@@ -72,10 +73,11 @@ class FileHandler:
         return proxy.generate_file_directives(proxy_service, url, self.filename, self.gzip)
 
     def __str__(self):
-        return f'file {self.filename} [gzip={self.gzip},chunk_size={self.chunk_size}]'
+        return f'{self.TYPE} {self.filename} [gzip={self.gzip},chunk_size={self.chunk_size}]'
 
 
 class DirHandler:
+    TYPE = 'directory'
     PROXY_DIRECTIVE_PRIORITY = 3
 
     def __init__(self, dirname, gzip=False, chunk_size=DEFAULT_CHUNK_SIZE):
@@ -103,10 +105,11 @@ class DirHandler:
         return proxy.generate_dir_directives(proxy_service, url, self.dirname, self.gzip)
 
     def __str__(self):
-        return f'directory {self.dirname} [gzip={self.gzip},chunk_size={self.chunk_size}]'
+        return f'{self.TYPE} {self.dirname} [gzip={self.gzip},chunk_size={self.chunk_size}]'
 
 
 class AppHandler:
+    TYPE = 'application'
     PROXY_DIRECTIVE_PRIORITY = 0
 
     @staticmethod
@@ -114,7 +117,7 @@ class AppHandler:
         return chain.next(request=request, **params)
 
     def __str__(self):
-        return 'application'
+        return self.TYPE
 
     def generate_proxy_directives(self, proxy_service, proxy, url):
         return proxy.generate_app_directives(proxy_service, url)
@@ -156,6 +159,7 @@ class WebSocket(websocket.WebSocket):
 
 
 class WebSocketHandler(manager.WebSocketManager):
+    TYPE = 'websocket'
     PROXY_DIRECTIVE_PRIORITY = 1
     POLLER_FACTORY = Selector
 
@@ -197,7 +201,7 @@ class WebSocketHandler(manager.WebSocketManager):
         return proxy.generate_ws_directives(proxy_service, url)
 
     def __str__(self):
-        return 'websocket'
+        return self.TYPE
 
 
 class SSEStream:
@@ -238,6 +242,7 @@ class SSEStream:
 
 
 class SSEHandler:
+    TYPE = 'sse'
     PROXY_DIRECTIVE_PRIORITY = 0
 
     def __init__(self, on_open, on_close, heartbeat=3):
@@ -288,7 +293,7 @@ class SSEHandler:
         return proxy.generate_app_directives(proxy_service, url)
 
     def __str__(self):
-        return 'sse'
+        return self.TYPE
 
 
 class Handler:
